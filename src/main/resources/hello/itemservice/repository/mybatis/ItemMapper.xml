@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- namespace에 Mapper 인터페이스를 지정해야 한다. -->
+<mapper namespace="hello.itemservice.repository.mybatis.ItemMapper">
+<!--
+id  = "save" 인터페이스 매퍼에서 설정한 메서드 이름을 지정
+#{} : 인터페이스에 정의된 파라메터를 매핑, 파라메터 타입이 클래스라면 클래스의 필드를 매핑해 준다.
+#{}의 문법은 JDBC의 ? 문자열을 통하여 치환하는 구조와 동일
+useGeneratedKeys="true": 데이터베이스에서 자동 생성된 키 값을 사용
+keyProperty="id": 자동 생성된 키 값을 매핑할 객체의 id 속성에 자동으로 할당
+insert의 경우 도메인 클래스의 필드명을 자동으로 사용할 수 있다.
+호출시: void save(Item item);
+-->
+    <insert id="save" useGeneratedKeys="true" keyProperty="id">
+        insert into item (item_name, price, quantity)
+        values (#{itemName}, #{price}, #{quantity})
+    </insert>
+<!--
+호출 구문: void update(@Param("id") Long id, @Param("updateParam") ItemUpdateDto updateParam);
+
+-->
+    <update id="update">
+        update item
+        set item_name=#{updateParam.itemName},
+            price=#{updateParam.price},
+            quantity=#{updateParam.quantity}
+        where id = #{id}
+    </update>
+
+<!-- resultType: 조회의 결과를 받을 타입을 명시
+특별한 설정이 없다면 타입의 패키지 경로까지 명시해 줘야 한다.
+현 프로젝트 설정(application.properties)
+mybatis.type-aliases-package=hello.itemserice.domain
+이렇게 Item 클래스에 대한 패키지 경로를 지정해 주었기 때문에 Item으로 표기가 가능하다
+mybatis.configuration.map-underscore-to-camel-case=true 속성을 지정한 덕분에
+언더스코어를 카멜 표기법으로 자동으로 처리해준다. ( item_name itemName )
+ -->
+    <select id="findById" resultType="Item">
+        select id, item_name, price, quantity
+        from item
+        where id = #{id}
+    </select>
+
+<!-- if 조건을 하나라도 만족하면 where 구문을 추가한다.
+두가지가 모두 존재하는 경우
+* H2용 SQL
+SELECT id, item_name, price, quantity
+FROM item
+WHERE item_name LIKE CONCAT('%', #{itemName}, '%')
+AND price <= #{maxPrice}
+
+* 오라클용 SQL
+SELECT id, item_name, price, quantity
+FROM item
+WHERE item_name LIKE '%' || #{itemName} || '%'
+AND price <= #{maxPrice}
+
+itemName이 'item' 이고 maxPrice가 1000 이면 SQL은 아래와 같이 치환
+SELECT id, item_name, price, quantity
+FROM item
+WHERE item_name LIKE 'item'
+AND price <=1000
+-->
+    <select id="findAll" resultType="Item">
+        select id, item_name, price, quantity
+        from item
+        <where>
+            <if test="itemName != null and itemName != ''">
+                and item_name like concat('%', #{itemName}, '%')
+            </if>
+            <if test="maxPrice != null">
+                and price &lt;= #{maxPrice}
+            </if>
+        </where>
+    </select>
+
+<!--  만약 MyBatis와 같은 동적 Query를  사용하지 않는다면  아래와 같은 동적 쿼리를 수동으로 작성해야 한다.
+ public List<Item> findAll(ItemSearchCond cond) {
+        String itemName = cond.getItemName();
+        Integer maxPrice = cond.getMaxPrice();
+
+        String sql = "select id, item_name, price, quantity from item";
+        //동적 쿼리
+        if (StringUtils.hasText(itemName) || maxPrice != null) {
+            sql += " where";
+        }
+
+        boolean andFlag = false;
+        List<Object> param = new ArrayList<>();
+        if (StringUtils.hasText(itemName)) {
+            sql += " item_name like concat('%',?,'%')";
+            param.add(itemName);
+            andFlag = true;
+        }
+
+        if (maxPrice != null) {
+            if (andFlag) {
+                sql += " and";
+            }
+            sql += " price <= ?";
+            param.add(maxPrice);
+        }
+
+        log.info("sql={}", sql);
+        return template.query(sql, itemRowMapper(), param.toArray());
+    }
+-->
+</mapper>
